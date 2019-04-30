@@ -1,0 +1,499 @@
+C51 COMPILER V9.54   RTC                                                                   04/30/2019 20:24:42 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE RTC
+OBJECT MODULE PLACED IN RTC.OBJ
+COMPILER INVOKED BY: H:\Keil\C51\BIN\C51.EXE RTC.c BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          /***************************************************
+   2          ???????????????,???12M
+   3          ?????,??????????
+   4          ????,???????
+   5          ***************************************************/
+   6          #include<reg51.h>
+   7          #include"ds1302.h"
+   8          #define uchar unsigned char
+   9          #define uint unsigned int
+  10          
+  11          uchar code W_RTC_ADDR[3] = {0x80, 0x82, 0x84};
+  12          uchar code W_CLOCK1_ADDR[3] = {0xC0, 0xC2, 0xC4}; 
+  13          uchar code R_CLOCK1_ADDR[3] = {0xC1, 0xC3, 0xC5};
+  14          uchar code W_CLOCK2_ADDR[3] = {0xC6, 0xC8, 0xCA}; 
+  15          uchar code R_CLOCK2_ADDR[3] = {0xC7, 0xC9, 0xCB};
+  16          
+  17          
+  18          /***????????****/
+  19          sbit s1 = P2 ^ 0;
+  20          sbit s2 = P2 ^ 1;
+  21          sbit s3 = P2 ^ 2;
+  22          sbit s4 = P2 ^ 3;
+  23          sbit s5 = P2 ^ 4;
+  24          sbit s6 = P2 ^ 5;
+  25          sbit s7 = P2 ^ 6;
+  26          sbit s8 = P2 ^ 7;
+  27          
+  28          
+  29          /*********??????*******
+  30          time_setting   ???? ????
+  31          clock1_setting ???? ??1??
+  32          clock2_setting ???? ??2??
+  33          switching      ???? ?????
+  34          up             ???? ???
+  35          down           ???? ???
+  36          sounder            ???? ???
+  37          ****************************/
+  38          sbit time_setting = P1 ^ 0;
+  39          sbit clock1_setting = P1 ^ 1;
+  40          sbit clock2_setting = P1 ^ 2;
+  41          sbit switching = P1 ^ 3;
+  42          sbit up = P1 ^ 4;
+  43          sbit down = P1 ^ 5;
+  44          sbit sounder = P3 ^ 7;
+  45          
+  46          /*********?????*********/
+  47          char count, count1, sec, min, hour, b, position, setting, setting_mode = 0; 
+  48          char sec1 = 1, min1 = 1, hour1 = 1, sec2 = 1, min2 = 1, hour2 = 1; //???????1?1?1?
+  49          char sec_h, sec_l, min_h, min_l, hour_h, hour_l;
+  50          uchar code cour[] = {0xFE, 0xFD, 0xFB, 0xF7, 0xEF, 0xDF, 0xBF, 0x7F};//???????
+  51          uchar code mum[] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F, 0x40}; //?????0-9,-??
+  52          
+  53          
+  54          /*********????**********/
+  55          void delayms(uint k)
+C51 COMPILER V9.54   RTC                                                                   04/30/2019 20:24:42 PAGE 2   
+
+  56          {
+  57   1              uint i, j;
+  58   1              for (i = k; i > 0; i--)
+  59   1                      for (j = 110; j > 0; j--);
+  60   1      }
+  61          
+  62          /*********???????**********/
+  63          void timecontrol()       //?????????1??,?????60,????1,?????60????1,??????24???0
+  64          {
+  65   1              sec++;
+  66   1              if (sec == 60)
+  67   1              {
+  68   2                      sec = 0;
+  69   2                      min++;
+  70   2                      if (min == 60)
+  71   2                      {
+  72   3                              min = 0;
+  73   3                              hour++;
+  74   3                              if (hour == 24)
+  75   3                                      hour = 0;
+  76   3                      }
+  77   2              }
+  78   1      }
+  79          
+  80          /*********???????**********/
+  81          void display(uchar zs, uchar zm, uchar zh)
+  82          {
+  83   1              uchar a;
+  84   1              for (a = 0; a < 8; a++)
+  85   1              {
+  86   2                      P2 = cour[a]; //??????????
+  87   2                      if (setting_mode == 1 && (count1<10))
+  88   2                              {
+  89   3                                      switch(position)
+  90   3                                      {
+  91   4                                      case 0: P2 = P2 | 0xC0; break;
+  92   4                                      case 1: P2 = P2 | 0x18; break;
+  93   4                                      case 2: P2 = P2 | 0x03; break;
+  94   4                                      }
+  95   3                              }
+  96   2      
+  97   2                      switch (a) //?????????????
+  98   2                      {
+  99   3                      case 0: P0 = mum[zh / 10]; break; //??????
+ 100   3                      case 1: P0 = mum[zh % 10]; break; //??????
+ 101   3                      case 2: P0 = mum[10];      break; //??-???
+ 102   3                      case 3: P0 = mum[zm / 10]; break; //??????
+ 103   3                      case 4: P0 = mum[zm % 10]; break; //??????
+ 104   3                      case 5: P0 = mum[10];      break; //??-???
+ 105   3                      case 6: P0 = mum[zs / 10]; break; //??????
+ 106   3                      case 7: P0 = mum[zs % 10]; break; //??????
+ 107   3                      default :;
+ 108   3                      }
+ 109   2                      delayms(1);//??
+ 110   2                      P0 = 0x00;
+ 111   2                      P2 = 0xFF; //???????
+ 112   2              }
+ 113   1      }
+ 114          
+ 115          /*********??????***********/
+ 116          void keyscan_settime()
+ 117          {
+C51 COMPILER V9.54   RTC                                                                   04/30/2019 20:24:42 PAGE 3   
+
+ 118   1              int realtime_sec, realtime_min, realtime_hour;
+ 119   1              if (time_setting == 0)                                          //??????????
+ 120   1              {
+ 121   2                      delayms(10);   //???
+ 122   2                      if (time_setting == 0)
+ 123   2                      {
+ 124   3                              realtime_sec = sec, realtime_min = min, realtime_hour = hour;           //????????????
+ 125   3                              TR0 = 0;                                        //?????
+ 126   3                              setting_mode = 1;
+ 127   3                              while (time_setting == 0)               //??????,????
+ 128   3                              {
+ 129   4                                      display(realtime_sec, realtime_min, realtime_hour);  //?????
+ 130   4                                      if (switching == 0)          //switching??????
+ 131   4                                      {
+ 132   5                                              delayms(10);   //??
+ 133   5                                              if (switching == 0)    //????
+ 134   5                                              {
+ 135   6                                                      while (!switching);  //??????,??????
+ 136   6                                                      position++;
+ 137   6                                                      if (position == 3)
+ 138   6                                                              position = 0; //???????
+ 139   6                                              }
+ 140   5                                      }
+ 141   4                                      /*??position???????*/
+ 142   4                                      if (up == 0)             //??
+ 143   4                                      {
+ 144   5                                              delayms(10);//??
+ 145   5                                              if (up == 0) //???????
+ 146   5                                              {
+ 147   6                                                      while (!up) //??????
+ 148   6                                                      {
+ 149   7                                                              b++;     //????
+ 150   7                                                              display(realtime_sec, realtime_min, realtime_hour); //?????
+ 151   7                                                              delayms(10);
+ 152   7                                                              if (b >= 20) //??????10*20=200ms
+ 153   7                                                              {
+ 154   8                                                                      b = 0;
+ 155   8                                                                      while (!up) //??????????????
+ 156   8                                                                      {
+ 157   9                                                                              switch (position)
+ 158   9                                                                              {
+ 159  10                                                                              case 0: realtime_sec++; if (realtime_sec == 60)realtime_sec = 0; break;
+ 160  10                                                                              case 1: realtime_min++; if (realtime_min == 60)realtime_min = 0; break;
+ 161  10                                                                              case 2: realtime_hour++; if (realtime_hour == 24)realtime_hour = 0; break;
+ 162  10                                                                              default :;
+ 163  10                                                                              }
+ 164   9                                                                              display(realtime_sec, realtime_min, realtime_hour); //??????
+ 165   9                                                                              delayms(10);//??????
+ 166   9                                                                      }
+ 167   8                                                              }
+ 168   7                                                      }//?????200ms????????????????1
+ 169   6                                                      switch (position)
+ 170   6                                                      {
+ 171   7                                                      case 0: realtime_sec++; if (realtime_sec == 60)realtime_sec = 0; break;
+ 172   7                                                      case 1: realtime_min++; if (realtime_min == 60)realtime_min = 0; break;
+ 173   7                                                      case 2: realtime_hour++; if (realtime_hour == 24)realtime_hour = 0; break;
+ 174   7                                                      default :;
+ 175   7                                                      }
+ 176   6                                              }
+ 177   5                                      }
+ 178   4                                      if (down == 0)             //???????
+ 179   4                                      {
+C51 COMPILER V9.54   RTC                                                                   04/30/2019 20:24:42 PAGE 4   
+
+ 180   5                                              delayms(10);
+ 181   5                                              if (down == 0)
+ 182   5                                              {
+ 183   6                                                      while (!down)
+ 184   6                                                      {
+ 185   7                                                              b++;
+ 186   7                                                              display(realtime_sec, realtime_min, realtime_hour); //?????????????????????
+ 187   7                                                              delayms(10);
+ 188   7                                                              if (b >= 20)
+ 189   7                                                              {
+ 190   8                                                                      b = 0;
+ 191   8                                                                      while (!down)
+ 192   8                                                                      {
+ 193   9                                                                              switch (position)
+ 194   9                                                                              {
+ 195  10                                                                              case 0: realtime_sec--; if (realtime_sec < 0)realtime_sec = 59; break;
+ 196  10                                                                              case 1: realtime_min--; if (realtime_min < 0)realtime_min = 59; break;
+ 197  10                                                                              case 2: realtime_hour--; if (realtime_hour < 0)realtime_hour = 23; break;
+ 198  10                                                                              default : ;
+ 199  10                                                                              }
+ 200   9                                                                              display(realtime_sec, realtime_min, realtime_hour);
+ 201   9                                                                              delayms(10);
+ 202   9                                                                      }
+ 203   8                                                              }
+ 204   7                                                      }
+ 205   6                                                      switch (position)
+ 206   6                                                      {
+ 207   7                                                      case 0: realtime_sec--; if (realtime_sec < 0)realtime_sec = 59; break;
+ 208   7                                                      case 1: realtime_min--; if (realtime_min < 0)realtime_min = 59; break;
+ 209   7                                                      case 2: realtime_hour--; if (realtime_hour < 0)realtime_hour = 23; break;
+ 210   7                                                      default : ;
+ 211   7                                                      }
+ 212   6                                              }
+ 213   5                                      }
+ 214   4                                      b = 0;
+ 215   4                              }
+ 216   3                              setting_mode = 0;
+ 217   3                              TR0 = 1;
+ 218   3                              sec = realtime_sec, min = realtime_min, hour = realtime_hour;
+ 219   3      
+ 220   3                              /***??DS1302????????***/
+ 221   3                              Ds1302Write(0x8E,0X00);          //?????,?????????
+ 222   3                              Ds1302Write(W_RTC_ADDR[0],sec / 10*16+ sec % 10);       
+ 223   3                              Ds1302Write(W_RTC_ADDR[1],min / 10*16+ min % 10);                               
+ 224   3                              Ds1302Write(W_RTC_ADDR[2],hour /10*16+ hour % 10);      
+ 225   3                              Ds1302Write(0x8E,0x80);          //???????
+ 226   3      
+ 227   3                      }
+ 228   2              }
+ 229   1              display(sec, min, hour);
+ 230   1      }
+ 231          
+ 232          void keyscan_clock()                //??????
+ 233          {
+ 234   1              if (clock1_setting == 0||clock2_setting == 0)           //???????
+ 235   1              {
+ 236   2                      delayms(10);
+ 237   2                      if (clock1_setting == 0||clock2_setting == 0)   //???????
+ 238   2                      {
+ 239   3                              if (clock1_setting == 0)
+ 240   3                                      setting = 0;
+ 241   3                              else
+C51 COMPILER V9.54   RTC                                                                   04/30/2019 20:24:42 PAGE 5   
+
+ 242   3                                      setting = 1;
+ 243   3                              // s=sec;m=min;h=hour;
+ 244   3                              setting_mode = 1;
+ 245   3                              while (clock1_setting == 0||clock2_setting == 0)      //??????
+ 246   3                              {
+ 247   4                                      if (setting == 0)
+ 248   4                                              display(sec1, min1, hour1);
+ 249   4                                      else
+ 250   4                                              display(sec2, min2, hour2);     //???????
+ 251   4                                      if (switching == 0)                     //??????
+ 252   4                                      {
+ 253   5                                              delayms(10);
+ 254   5                                              if (switching == 0)             //?????
+ 255   5                                              {
+ 256   6                                                      while (!switching); //??????????
+ 257   6                                                      position++;
+ 258   6                                                      if (position == 3)        position = 0;
+ 259   6                                              }
+ 260   5                                      }
+ 261   4                                      /*??position???????*/
+ 262   4                                      if (up == 0)             //??
+ 263   4                                      {
+ 264   5                                              delayms(10);
+ 265   5                                              if (up == 0)
+ 266   5                                              {
+ 267   6                                                      while (!up) //??????
+ 268   6                                                      {
+ 269   7                                                              b++;     //????
+ 270   7                                                              if (setting == 0)
+ 271   7                                                                      display(sec1, min1, hour1);
+ 272   7                                                              else
+ 273   7                                                                      display(sec2, min2, hour2); //?????????????????????
+ 274   7                                                              delayms(10);
+ 275   7                                                              if (b >= 20) //??????10*20=200ms
+ 276   7                                                              {
+ 277   8                                                                      b = 0;
+ 278   8                                                                      while (!up) //?????,?????????
+ 279   8                                                                      {
+ 280   9                                                                              switch (position+3*setting)
+ 281   9                                                                              {
+ 282  10                                                                              case 0: sec1++; if (sec1 == 60)sec1 = 0; break;
+ 283  10                                                                              case 1: min1++; if (min1 == 60)min1 = 0; break;
+ 284  10                                                                              case 2: hour1++; if (hour1 == 24)hour1 = 0; break;
+ 285  10                                                                              case 3: sec2++; if (sec2 == 60)sec2 = 0; break;
+ 286  10                                                                              case 4: min2++; if (min2 == 60)min2 = 0; break;
+ 287  10                                                                              case 5: hour2++; if (hour2 == 24)hour2 = 0; break;
+ 288  10                                                                              default :;
+ 289  10                                                                              }
+ 290   9                                                                              if (setting == 0)
+ 291   9                                                                                      display(sec1, min1, hour1);
+ 292   9                                                                              else
+ 293   9                                                                                      display(sec2, min2, hour2);
+ 294   9                                                                              delayms(10);//??????
+ 295   9                                                                      }
+ 296   8                                                              }
+ 297   7                                                      }//?????200ms????????????????1
+ 298   6                                                      switch (position+3*setting)
+ 299   6                                                      {
+ 300   7                                                      case 0: sec1++; if (sec1 == 60)sec1 = 0; break;
+ 301   7                                                      case 1: min1++; if (min1 == 60)min1 = 0; break;
+ 302   7                                                      case 2: hour1++; if (hour1 == 24)hour1 = 0; break;
+ 303   7                                                      case 3: sec2++; if (sec2 == 60)sec2 = 0; break;
+C51 COMPILER V9.54   RTC                                                                   04/30/2019 20:24:42 PAGE 6   
+
+ 304   7                                                      case 4: min2++; if (min2 == 60)min2 = 0; break;
+ 305   7                                                      case 5: hour2++; if (hour2 == 24)hour2 = 0; break;
+ 306   7                                                      default :;
+ 307   7                                                      }
+ 308   6                                              }
+ 309   5                                      }
+ 310   4                                      if (down == 0)             //???????
+ 311   4                                      {
+ 312   5                                              delayms(10);
+ 313   5                                              if (down == 0)
+ 314   5                                              {
+ 315   6                                                      while (!down)
+ 316   6                                                      {
+ 317   7                                                              b++;
+ 318   7                                                              if (setting == 0)
+ 319   7                                                                      display(sec1, min1, hour1);
+ 320   7                                                              else
+ 321   7                                                                      display(sec2, min2, hour2); //?????????????????????
+ 322   7                                                              delayms(10);
+ 323   7                                                              if (b >= 20)
+ 324   7                                                              {
+ 325   8                                                                      b = 0;
+ 326   8                                                                      while (!down)
+ 327   8                                                                      {
+ 328   9                                                                              switch (position+3*setting)
+ 329   9                                                                              {
+ 330  10                                                                              case 0: sec1--; if (sec1 < 0)sec1 = 59; break;
+ 331  10                                                                              case 1: min1--; if (min1 < 0)min1 = 59; break;
+ 332  10                                                                              case 2: hour1--; if (hour1 < 0)hour1 = 23; break;
+ 333  10                                                                              case 3: sec2--; if (sec2 < 0)sec2 = 59; break;
+ 334  10                                                                              case 4: min2--; if (min2 < 0)min2 = 59; break;
+ 335  10                                                                              case 5: hour2--; if (hour2 < 0)hour2 = 23; break;
+ 336  10                                                                              default :;
+ 337  10                                                                              }
+ 338   9                                                                              if (setting == 0)
+ 339   9                                                                                      display(sec1, min1, hour1);
+ 340   9                                                                              else
+ 341   9                                                                                      display(sec2, min2, hour2);
+ 342   9                                                                              delayms(10);
+ 343   9                                                                      }
+ 344   8                                                              }
+ 345   7                                                      }
+ 346   6                                                      switch (position+3*setting)
+ 347   6                                                      {
+ 348   7                                                      case 0: sec1--; if (sec1 < 0)sec1 = 59; break;
+ 349   7                                                      case 1: min1--; if (min1 < 0)min1 = 59; break;
+ 350   7                                                      case 2: hour1--; if (hour1 < 0)hour1 = 23; break;
+ 351   7                                                      case 3: sec2--; if (sec2 < 0)sec2 = 59; break;
+ 352   7                                                      case 4: min2--; if (min2 < 0)min2 = 59; break;
+ 353   7                                                      case 5: hour2--; if (hour2 < 0)hour2 = 23; break;
+ 354   7                                                      default :;
+ 355   7                                                      }
+ 356   6                                              }
+ 357   5                                      }
+ 358   4                                      b = 0;
+ 359   4                                      if (setting == 0)
+ 360   4                                              display(sec1, min1, hour1);
+ 361   4                                      else
+ 362   4                                              display(sec2, min2, hour2);
+ 363   4      
+ 364   4                                      Ds1302Write(0x8E,0X00);          //?????,?????????
+ 365   4                                      Ds1302Write(W_CLOCK1_ADDR[0], sec1);    
+C51 COMPILER V9.54   RTC                                                                   04/30/2019 20:24:42 PAGE 7   
+
+ 366   4                                      Ds1302Write(W_CLOCK1_ADDR[1], min1);    
+ 367   4                                      Ds1302Write(W_CLOCK1_ADDR[2], hour1);
+ 368   4                                      Ds1302Write(W_CLOCK2_ADDR[0], sec2);    
+ 369   4                                      Ds1302Write(W_CLOCK2_ADDR[1], min2);                    
+ 370   4                                      Ds1302Write(W_CLOCK2_ADDR[2], hour2);
+ 371   4                                      Ds1302Write(0x8E,0x80);          //???????
+ 372   4      
+ 373   4                              }
+ 374   3                              setting_mode = 0;
+ 375   3                      }
+ 376   2              }
+ 377   1      }
+ 378          void buz()
+ 379          {
+ 380   1              if (((hour == hour1) && (min == min1) && (sec == sec1)) || ((hour == hour2) && (min == min2) && (sec == s
+             -ec2))) //???????????,????
+ 381   1              {
+ 382   2                      char temp_hour, temp_min, temp_sec;
+ 383   2                      temp_hour = hour;
+ 384   2                      temp_min = min;
+ 385   2                      temp_sec = sec;
+ 386   2                      while ((time_setting && clock1_setting && switching && up && down) == 1) //????????????,????????????,??
+ 387   2                      {
+ 388   3                              sounder = !sounder;             //?????
+ 389   3                              delayms(400);
+ 390   3                              display(temp_sec, temp_min, temp_hour);         //??????
+ 391   3                              P0 = 0x00;                      //????,??????
+ 392   3                      }
+ 393   2      
+ 394   2              }
+ 395   1      }
+ 396          
+ 397          void ReloadTime(){
+ 398   1              Ds1302ReadTime();
+ 399   1              hour_h = TIME[2]/16;                            //?
+ 400   1              hour_l = TIME[2]&0x0f;                           
+ 401   1              hour = hour_h * 10 + hour_l;
+ 402   1      
+ 403   1              min_h = TIME[1]/16;                             //?
+ 404   1              min_l = TIME[1]&0x0f;
+ 405   1              min = min_h * 10 + min_l;
+ 406   1      
+ 407   1              sec_h = TIME[0]/16;                             //?
+ 408   1              sec_l = TIME[0]&0x0f;
+ 409   1              sec = sec_h * 10 + sec_l;
+ 410   1      
+ 411   1              sec1 = Ds1302Read(R_CLOCK1_ADDR[0]);
+ 412   1              min1 = Ds1302Read(R_CLOCK1_ADDR[1]);
+ 413   1              hour1 = Ds1302Read(R_CLOCK1_ADDR[2]);
+ 414   1              sec2 = Ds1302Read(R_CLOCK2_ADDR[0]);
+ 415   1              min2 = Ds1302Read(R_CLOCK2_ADDR[1]);
+ 416   1              hour2 = Ds1302Read(R_CLOCK2_ADDR[2]);
+ 417   1      }
+ 418          
+ 419          void main()
+ 420          {
+ 421   1              TMOD = 0x11;                    //????????1
+ 422   1              TH0 = (65536 - 50000) / 256;    //???0???,50ms
+ 423   1              TL0 = (65536 - 50000) % 256;
+ 424   1              TH1 = (65536 - 50000) / 256;    //???1???,50ms
+ 425   1              TL1 = (65536 - 50000) % 256;
+ 426   1              EA = 1;                                 //?????
+C51 COMPILER V9.54   RTC                                                                   04/30/2019 20:24:42 PAGE 8   
+
+ 427   1              ET0 = 1;                                //T0????
+ 428   1              TR0 = 1;                                //????0
+ 429   1      
+ 430   1              ET1 = 1;                                //T1????
+ 431   1              TR1 = 1;                                //????1
+ 432   1              //Ds1302Init();                                 //???DS1302
+ 433   1              ReloadTime();
+ 434   1              while (1)
+ 435   1              {
+ 436   2                      keyscan_settime();                      //????
+ 437   2                      keyscan_clock();                //????
+ 438   2                      buz();                                  //???
+ 439   2              }
+ 440   1      }
+ 441          
+ 442          void T0_ms() interrupt 1                        //??????
+ 443          {
+ 444   1              TH0 = (65536 - 50000) / 256;        //?????
+ 445   1              TL0 = (65536 - 50000) % 256;
+ 446   1              count++;
+ 447   1              if (count == 20)                        //??1s??????
+ 448   1              {
+ 449   2                      count = 0;
+ 450   2                      timecontrol();                                  //?????
+ 451   2              }
+ 452   1      }
+ 453          
+ 454          void T1_ms() interrupt 3                        //?????
+ 455          {
+ 456   1              TH1 = (65536 - 50000) / 256;        //?????
+ 457   1              TL1 = (65536 - 50000) % 256;
+ 458   1              count1++;
+ 459   1              if (count1 == 20)                       //??1s??????
+ 460   1                      count1 = 0;
+ 461   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2000    ----
+   CONSTANT SIZE    =     34    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     21      10
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
